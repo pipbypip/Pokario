@@ -211,6 +211,11 @@
     font-size: 16px;
     border-radius: 6px;
   }
+  #vol-slider-m {
+    width: 80px;
+    margin-top: 2px;
+    accent-color: #8bac0f;
+  }
 </style>
 </head>
 <body>
@@ -236,6 +241,7 @@
     <div id="tc-mid">
       <button class="ctrl-btn" id="restart-btn-m" title="Restart">↺</button>
       <button class="ctrl-btn" id="mute-btn-m" title="Toggle music">🔊</button>
+      <input type="range" id="vol-slider-m" min="0" max="100" value="25" title="Volume" aria-label="Volume" />
     </div>
     <button class="ctrl-btn" id="btn-z">CONFIRM</button>
   </div>
@@ -422,12 +428,20 @@
     }
 
     function start() {
-      if (started) return;
-      started = true;
       ensureCtx();
-      if (actx && actx.state === 'suspended') {
-        actx.resume().then(() => play('overworld'));
-      } else {
+      if (!actx) return;
+      // iOS / Safari unlock: must happen synchronously in a user gesture.
+      // Play a one-sample silent buffer to fully wake the audio hardware.
+      try {
+        const buf = actx.createBuffer(1, 1, 22050);
+        const src = actx.createBufferSource();
+        src.buffer = buf;
+        src.connect(actx.destination);
+        src.start(0);
+      } catch (e) {}
+      if (actx.state === 'suspended') actx.resume();
+      if (!started) {
+        started = true;
         play('overworld');
       }
     }
@@ -448,23 +462,34 @@
   window.addEventListener('touchstart', kickMusic, { passive: true });
   window.addEventListener('pointerdown', kickMusic, { passive: true });
 
-  const muteBtn = document.getElementById('mute-btn');
+  const muteBtn   = document.getElementById('mute-btn');
+  const muteBtnM  = document.getElementById('mute-btn-m');
   const volSlider = document.getElementById('vol-slider');
+  const volSliderM = document.getElementById('vol-slider-m');
+
+  function refreshMuteIcons() {
+    const icon = Music.isMuted() ? '🔇' : '🔊';
+    if (muteBtn)  muteBtn.textContent  = icon;
+    if (muteBtnM) muteBtnM.textContent = icon;
+  }
+  function syncSliders(value) {
+    if (volSlider)  volSlider.value  = value;
+    if (volSliderM) volSliderM.value = value;
+  }
+  function handleVolInput(srcSlider) {
+    const v = parseInt(srcSlider.value, 10) / 100;
+    Music.setVolume(v);
+    syncSliders(srcSlider.value);
+    if (v === 0) Music.setMuted(true);
+    else if (Music.isMuted()) Music.setMuted(false);
+    refreshMuteIcons();
+  }
   muteBtn.addEventListener('click', () => {
     Music.setMuted(!Music.isMuted());
-    muteBtn.textContent = Music.isMuted() ? '🔇' : '🔊';
+    refreshMuteIcons();
   });
-  volSlider.addEventListener('input', () => {
-    const v = parseInt(volSlider.value, 10) / 100;
-    Music.setVolume(v);
-    if (v === 0) {
-      Music.setMuted(true);
-      muteBtn.textContent = '🔇';
-    } else if (Music.isMuted()) {
-      Music.setMuted(false);
-      muteBtn.textContent = '🔊';
-    }
-  });
+  volSlider.addEventListener('input',  () => handleVolInput(volSlider));
+  if (volSliderM) volSliderM.addEventListener('input', () => handleVolInput(volSliderM));
 
   // GB palette
   const C = {
@@ -1900,17 +1925,19 @@
       restartBtnM.addEventListener('touchstart', e => { e.preventDefault(); location.reload(); }, { passive: false });
       restartBtnM.addEventListener('click', () => location.reload());
     }
-    const muteBtnM = document.getElementById('mute-btn-m');
-    if (muteBtnM) {
+    const muteBtnMobile = document.getElementById('mute-btn-m');
+    if (muteBtnMobile) {
       function toggleMuteM(e) {
         if (e) e.preventDefault();
+        Music.start(); // also a valid unlock gesture on iOS
         Music.setMuted(!Music.isMuted());
         const icon = Music.isMuted() ? '🔇' : '🔊';
-        muteBtnM.textContent = icon;
-        document.getElementById('mute-btn').textContent = icon;
+        muteBtnMobile.textContent = icon;
+        const desktopBtn = document.getElementById('mute-btn');
+        if (desktopBtn) desktopBtn.textContent = icon;
       }
-      muteBtnM.addEventListener('touchstart', toggleMuteM, { passive: false });
-      muteBtnM.addEventListener('click', toggleMuteM);
+      muteBtnMobile.addEventListener('touchstart', toggleMuteM, { passive: false });
+      muteBtnMobile.addEventListener('click', toggleMuteM);
     }
   })();
 
