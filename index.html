@@ -729,7 +729,7 @@
       }
       return;
     }
-    if (justPressed(['e', 'enter'])) {
+    if (justPressed(['e', 'enter', 'z', ' '])) {
       const dk = `${player.tx},${player.ty}`;
       if (dk in DOOR_MAP) { fadeOut(() => enterBuilding(DOOR_MAP[dk])); return; }
       const fd = {up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]}[player.dir];
